@@ -70,6 +70,7 @@ def connect_from_env():
     port = int(os.getenv("MYSQL_PORT", 3306))
 
     # Try SQLAlchemy first
+    last_err = None
     try:
         if create_engine is not None:
             engine = get_engine(user, password, host, port, database)
@@ -88,8 +89,82 @@ def connect_from_env():
         cur.close()
         conn.close()
         return {"type": "connector", "result": rows}
-    except Exception:
-        raise last_err
+    except Exception as e:
+        if last_err is not None:
+            raise last_err
+        raise
+
+
+def _get_env_params():
+    """Return connection params from environment variables."""
+    host = os.getenv("MYSQL_HOST", "localhost")
+    user = os.getenv("MYSQL_USER", "root")
+    password = os.getenv("MYSQL_PASSWORD", "")
+    database = os.getenv("MYSQL_DB", "test")
+    port = int(os.getenv("MYSQL_PORT", 3306))
+    return host, user, password, database, port
+
+
+def fetch_all_products():
+    """Fetch all rows from `products` table using env credentials.
+
+    Returns a list of rows as dictionaries when possible.
+    """
+    host, user, password, database, port = _get_env_params()
+
+    # Try SQLAlchemy first
+    if create_engine is not None:
+        try:
+            engine = get_engine(user, password, host, port, database)
+            with engine.connect() as conn:
+                result = conn.execute(text("SELECT * FROM products"))
+                try:
+                    return [dict(r) for r in result.mappings().all()]
+                except Exception:
+                    return [tuple(r) for r in result.fetchall()]
+        except Exception:
+            pass
+
+    # Fallback to raw connector
+    conn = get_connection(host, user, password, database, port)
+    cur = conn.cursor(dictionary=True)
+    cur.execute("SELECT * FROM products")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
+
+
+def fetch_product_by_id(product_id: int):
+    """Fetch a single product by `id` using env credentials.
+
+    Returns a single row (dict or tuple) or None if not found.
+    """
+    host, user, password, database, port = _get_env_params()
+
+    # Try SQLAlchemy first
+    if create_engine is not None:
+        try:
+            engine = get_engine(user, password, host, port, database)
+            with engine.connect() as conn:
+                result = conn.execute(text("SELECT * FROM products WHERE id = :id"), {"id": product_id})
+                try:
+                    rows = result.mappings().all()
+                    return dict(rows[0]) if rows else None
+                except Exception:
+                    rows = result.fetchall()
+                    return tuple(rows[0]) if rows else None
+        except Exception:
+            pass
+
+    # Fallback to raw connector
+    conn = get_connection(host, user, password, database, port)
+    cur = conn.cursor(dictionary=True)
+    cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
 
 
 if __name__ == "__main__":
