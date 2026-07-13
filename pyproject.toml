@@ -5,6 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "aiomysql>=0.3.2",
+    "greenlet>=3.5.3",
     "ipykernel>=7.3.0",
     "mysql-connector-python>=9.7.0",
     "numpy>=2.5.0",
